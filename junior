@@ -1,172 +1,106 @@
-import { Component} from '@angular/core';
+import {  Component } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { ApiService } from 'src/app/services/api.service';
+import { ConfirmationDialog } from '../confirmation-dialog/confirmation-dialog.component';
+import { MatDialog } from '@angular/material/dialog';
+import { MatDialogConfig } from '@angular/material/dialog';
 import { Router } from '@angular/router';
+import { NonNullAssert } from '@angular/compiler';
 import { ActiveServicesService } from '../../active-services.service';
 
+
 @Component({
-  selector: 'app-home',
-  templateUrl: './home.component.html',
-  styleUrls: ['./home.component.css']
+  selector: 'app-planif-home',
+  templateUrl: './planif-home.component.html',
+  styleUrls: ['./planif-home.component.css']
 })
-export class HomeComponent {
-  currentLink: string = '';
-  isPlanifActive: boolean = false;
-  isPayloadControllerActive: boolean = false;
-  isSatelliteControlCenterActive: boolean = false;
-  activeServices: string[] = []; // Array to track active services
-  openedWindows: Window[] = [];
+export class PlanifHomeComponent {
 
-  constructor(private router: Router, public activeServicesService: ActiveServicesService) {}
+  public missions: any;
+  createForm!: FormGroup;
+  submitted = false;
+  planifWindow: Window | null = null;
 
-  // goToLink method is called when a link is clicked.
-  // goToLink method is called when a link is clicked.
-  goToLink(url: string, name: string) {
-    // Check if the window is already open
-    const existingWindow = this.openedWindows.find((window) => window.name === name);
-    if (existingWindow && !existingWindow.closed) {
-      // If the window is already open, bring it to the front
-      existingWindow.focus();
-    } else {
-      // Open the window and add it to the openedWindows array
-      const newWindow = window.open(url, name, 'location=yes');
-      if (newWindow) {
-        this.openedWindows.push(newWindow);
-        this.currentLink = url;
+  constructor(private service:ApiService, public dialog: MatDialog, private formBuilder:FormBuilder, private router: Router, private activeServicesService: ActiveServicesService) {
+    this.activeServicesService.isPlanifActive = true;
+  }
 
-        // Determine which link is active and update the corresponding variable
-        if (name === 'Planification Mission') {
-          this.activeServicesService.isPlanifActive = true;
-        } else if (name === 'payload controller') {
-          this.activeServicesService.isPayloadControllerActive = true;
-        } else if (name === 'satellite controll center') {
-          this.activeServicesService.isSatelliteControlCenterActive = true;
-        }
 
-        // Send a message to the child window to indicate that the window has been opened.
-        newWindow.postMessage('windowOpened', '*');
-      }
+  ngOnInit(): void {
+    this.getMissions();
+    this.createForm = this.formBuilder.group({
+
+      name: ['',[ Validators.maxLength(15), Validators.required]],
+      
+      description: ['', Validators.maxLength(140)],
+      
+      date: ['', Validators.required],
+
+      status: ['down']
+      
+      });
+
+    window.onunload = () => this.handleWindowClose();  
+    
+
+  }
+
+
+  get f(){return this.createForm.controls;}
+
+  getMissions = () => {
+    return new Promise((resolve, reject) => {
+      this.service.getAllMissions()
+        .subscribe(response => {
+          this.missions = response;
+          resolve(this.missions)
+        });
+    });
+  }
+
+  delMission(id: any): void{
+
+    this.service.deleteMission(id).subscribe(() => this.getMissions());
+  }
+
+  onAddMission(): void{
+    /*Object.defineProperty(mission.value, 'status', {
+      value: 'down'
+    });*/
+    //console.log(mission.value)
+    this.submitted = true;
+
+    console.log(this.createForm.value);
+    this.service.postMission(this.createForm.value).subscribe(() => this.getMissions());
+    this.createForm.reset();}
+  
+  openDialog(id:number, missionName: String) {
+    const config = new MatDialogConfig();
+    config.data = {
+      message: 'Do you want to delete ' + missionName
     }
-  }
+    config.panelClass ="/confirmation-dialog/confirmation-dialog.component.css"
 
 
-  // ... (existing code)
-  
-  ngOnInit() {
-    // Listen for messages from the child windows
-    window.addEventListener('message', this.handleChildWindowClose.bind(this));
+    const dialogRef = this.dialog.open(ConfirmationDialog,config);
+    dialogRef.afterClosed().subscribe((confirmed: boolean) => {
+        if (confirmed) {
+            this.delMission(id);
+        }
+    });
+  } 
 
-  }
-
-  handleChildWindowClose() {
-    console.log('Received message:');
-    // Update the active status based on the remaining opened windows
-    this.activeServicesService.isPlanifActive = this.openedWindows.some(
-      (window) => window.name === 'Planification Mission'
-    );
-    this.activeServicesService.isPayloadControllerActive = this.openedWindows.some(
-      (window) => window.name === 'payload controller'
-    );
-    this.activeServicesService.isSatelliteControlCenterActive = this.openedWindows.some(
-      (window) => window.name === 'satellite controll center'
-    );
-  
-    // Reset the link when all windows are closed
-    if (this.openedWindows.length === 0) {
-      this.currentLink = '';
+  handleWindowClose() {
+    if (this.activeServicesService.isPlanifActive) {
+      this.activeServicesService.isPlanifActive = false;
+      // Inform home.component that this window is closed
+      window.opener.postMessage('windowClosed', '*');
     }
   }
 }
 
+function Viewchild(arg0: string): (target: PlanifHomeComponent, propertyKey: "creaRef") => void {
+  throw new Error('Function not implemented.');
+}
 
 
-
-<div class="title">
-    <h3 style="color: white;">Télécommunication mission center</h3>
-  </div>
-  
-  <hr class="hasher">
-  
-  <div class="content">
-    <div class="row">
-      <div class="col-6 pcs">
-        <div class="row">
-          <figure class="fg1" role="fiqure">
-            <img src="../../../assets/images/pc.png" class="pc_secu">
-            <figcaption class="fgmg1" style="color: white; font-size: smaller;">surveillance</figcaption>
-          </figure>
-        </div>
-        <div class="w-400"></div>
-        <div class="row first">
-          <div class="col-4">
-            <figure class="fg2" role="fiqure">
-              <a (click)="goToLink('/planif', 'Planification Mission');">
-                <img [src]="activeServicesService.isPlanifActive ? '../../../assets/images/pc_a.png' : '../../../assets/images/pc.png'" class="pc_pcu">
-              </a>
-              <figcaption style="color: white; font-size: small;">payload planner</figcaption>
-            </figure>
-          </div>
-          <div class="col-4">
-            <figure class="fg3" role="fiqure">
-              <a (click)="goToLink('/config', 'payload controller');">
-                <img [src]="activeServicesService.isPayloadControllerActive ? '../../../assets/images/pc_a.png' : '../../../assets/images/pc.png'" class="pc_ccu">
-              </a>
-              <figcaption style="color: white; font-size: small;">payload controller</figcaption>
-            </figure>
-          </div>
-          <div class="col-4">
-            <figure class="fg4" role="fiqure">
-              <a (click)="goToLink('/scc', 'satellite controll center');">
-                <img [src]="activeServicesService.isSatelliteControlCenterActive ? '../../../assets/images/pc_a.png' : '../../../assets/images/pc.png'" class="pc_ccs">
-              </a>
-              <figcaption style="color: white; font-size: smaller;">satellite control center</figcaption>
-            </figure>
-          </div>
-        </div>
-        <div class="w-400"></div>
-        <div class="row second">
-          <div class="col-4">
-            <figure class="fg5" role="fiqure">
-              <a (click)="goToLink('/planif', 'Planification Mission');">
-                <img [src]="activeServicesService.isPlanifActive ? '../../../assets/images/pc_a.png' : '../../../assets/images/pc.png'" class="pc_pm">
-              </a>
-              <figcaption class="fgmg5" style="color: white; font-size: small;">mission scheduler</figcaption>
-            </figure>
-          </div>
-          <div class="col-4">
-            <figure class="fg6" role="fiqure">
-              <a (click)="goToLink('/planif', 'Planification Mission');">
-                <img [src]="activeServicesService.isPlanifActive ? '../../../assets/images/pc_a.png' : '../../../assets/images/pc.png'" class="pc_prf">
-              </a>
-              <figcaption class="fgmg6" style="color: white; font-size: small;">RF planner</figcaption>
-            </figure>
-          </div>
-          <div class="col-4">
-            <figure class="fg7" role="fiqure">
-              <img src="../../../assets/images/pc.png" class="pc_cs">
-              <figcaption style="color: white; font-size: smaller;">control station</figcaption>
-            </figure>
-          </div>
-        </div>
-      </div>
-      <div class="col-6 my">
-        <img class="comm" src="../../../assets/images/comm.png">
-      </div>
-    </div>
-  </div>
-  
-  <div class="row bc">
-    <div class="col-3 align-self-center" style="text-align: center;">
-      <a class="phase1" style="color: white; font-size: x-large;">Mission planning</a>
-    </div>
-    <div class="col-1 align-self-center" style="text-align: center;">
-      <div class="phase1" style="color: white; font-size: xx-large;">></div>
-    </div>
-    <div class="col-4 align-self-center" style="text-align: center;">
-      <a class="phase1" style="color: white; font-size: x-large;">Mission management</a>
-    </div>
-    <div class="col-1 align-self-center" style="text-align: center;">
-      <div class="phase1" style="color: white; font-size: xx-large;">></div>
-    </div>
-    <div class="col-3 align-self-center" style="text-align: center;">
-      <a class="phase1" style="color: white; font-size:x-large;">Mission monitoring</a>
-    </div>
-  </div>
